@@ -1,0 +1,227 @@
+type element. (*element in finite field or group*)
+free Pub:channel.
+free Sec:channel [private].
+
+(*Name & Variables*)
+
+(*elment of group*)
+
+const P:element.
+free Ppub:element.
+free s:bitstring [private].
+
+(*device Variables*)
+
+(*device i*)
+free IDi:bitstring.
+
+free Xi:element.
+free Yi:element.
+
+free xi:bitstring [private].
+free yi:bitstring [private].
+
+free ui:bitstring [private].
+
+(*device j*)
+
+free IDj:bitstring.
+
+free Xj:element.
+free Yj:element.
+
+free xj:bitstring [private].
+
+free yj:bitstring [private].
+
+free uj:bitstring [private].
+
+(*Hash Function.*)
+
+fun H1(bitstring,element,element,element):bitstring.
+
+fun H2(bitstring,element):bitstring.
+
+fun H3(bitstring,bitstring,element,element,element,element,bitstring,element,element):bitstring.
+
+fun H4(bitstring,bitstring,element,element,element,element,bitstring,element,element):bitstring.
+
+fun H5(bitstring,bitstring,element,element,element,element,bitstring,element,element):bitstring.
+
+(*function action.*)
+
+fun XOR(bitstring,bitstring):bitstring.
+
+fun ADD(bitstring,bitstring):bitstring.
+
+fun ADDElement(element,element):element.
+
+fun Mult(bitstring,bitstring):bitstring.(*multiple Zp*)
+
+fun MultInCurve(bitstring,element):element.(*aP*)
+
+
+equation forall a:bitstring,b:bitstring;XOR(XOR(a,b),b)=a.
+
+(*Event*)
+
+event beginDevicei(bitstring).
+
+event endDevicei(bitstring).
+
+event beginDevicej(bitstring).
+
+event endDevicej(bitstring).
+
+
+(*Queries*)
+
+query attacker(xi).
+query attacker(yi).
+query attacker(xj).
+query attacker(yj).
+
+query id:bitstring;inj-event(endDevicei(id)) ==>inj-event(beginDevicej(id)).
+
+query id:bitstring;inj-event(endDevicej(id)) ==>inj-event(beginDevicei(id)).
+
+(*Process*)
+
+(*KGC Process*)
+
+let DeviceiReg = 
+			in(Sec,(IDi:bitstring,Xi:element));
+			new ui:bitstring;
+			let Yi = MultInCurve(ui,P) in
+			let yi = ADD(ui,Mult(s,H1(IDi,Xi,Yi,Ppub))) in
+			out(Sec,(Yi,yi));
+			0.
+			
+
+let DevicejReg = 
+			in(Sec,(IDj:bitstring,Xj:element));
+			new uj:bitstring;
+			let Yj = MultInCurve(uj,P) in
+			let yj = ADD(uj,Mult(s,H1(IDj,Xj,Yj,Ppub))) in
+			out(Sec,(Yj,yj));
+			0.	
+			
+let KGC=DeviceiReg | DevicejReg.
+
+(*Devicei Process*)
+
+let Devicei =
+	let Xi=MultInCurve(xi,P) in
+	out(Sec,(IDi,Xi));
+	
+	
+	in(Sec,(Yi:element,yi:bitstring));
+	
+	event beginDevicei(IDi);
+	
+	new ki:bitstring;
+	new ti:bitstring;
+	new M:bitstring;
+	
+	let Ki = MultInCurve(ki,P) in 
+	let Ti = MultInCurve(ti,P) in
+	let hj=H1(IDj,Xj,Yj,Ppub) in
+	let option2 =ADDElement(Xj,ADDElement(Yj,MultInCurve(hj,Ppub))) in
+	let option1 = MultInCurve(ki,option2) in
+	let Qi = ADDElement(option1,MultInCurve(ti,Xj)) in
+	let h2i = H2(IDi,Qi) in
+	let Ci = XOR(M,h2i) in
+	let h3i =H3(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	let h4i =H4(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	let h5i =H5(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	let sigema = ADD(Mult(h3i,ti),ADD(Mult(h4i,xi),Mult(h5i,yi))) in
+	out(Pub,(Ci,sigema,Ki,Ti));
+	
+	
+	
+	
+	in(Pub,(Cj:bitstring,sigema':bitstring,Kj:element,Tj:element));
+	
+	let h3i' = H3(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in
+	let h4i' = H4(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in
+	let h5i' = H5(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in
+	if(MultInCurve(sigema',P)) = ADDElement(MultInCurve(h3i',Tj),ADDElement(MultInCurve(h4i',Xj),MultInCurve(h5i',Yj))) then
+	
+	let Qj'=ADDElement(MultInCurve(ADD(xi,yi),Kj),MultInCurve(xi,Tj)) in
+	
+	let h2i' = H2(IDj,Qj') in 
+	let M' = XOR(Cj,h2i') in
+	
+	
+	
+	event endDevicei(IDi)
+	else 0.
+	
+	
+	
+(*Device j*)
+let Devicej = 
+	let Xj=MultInCurve(xj,P) in
+	out(Sec,(IDj,Xj));
+	
+	
+	in(Sec,(Yj:element,yj:bitstring));
+	
+	event beginDevicei(IDj);
+	
+	in(Pub,(Ci:bitstring,sigema:bitstring,Ki:element,Ti:element));
+	
+	let h3j = H3(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	let h4j = H4(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	let h5j = H5(IDi,IDj,Xi,Yi,Xj,Yj,Ci,Ki,Ti) in
+	
+	if(MultInCurve(sigema,P)) = ADDElement(MultInCurve(h3j,Ti),ADDElement(MultInCurve(h4j,Xi),MultInCurve(h5j,Yi))) then
+	
+	let Qi' = ADDElement(MultInCurve(ADD(xj,yj),Ki),MultInCurve(xj,Ti)) in
+	let h2j = H2(IDi,Qi') in
+	let M' = XOR(Ci,h2j) in 
+	
+	
+	
+	new M':bitstring;
+	
+	new kj:bitstring;
+	new tj:bitstring;
+	
+	let Kj = MultInCurve(kj,P) in 
+	let Tj = MultInCurve(tj,P) in 
+	let hi=H1(IDi,Xi,Yi,Ppub) in
+	
+	let Qj = ADDElement(MultInCurve(kj,ADDElement(Xi,ADDElement(Yi,MultInCurve(hi,Ppub)))),MultInCurve(tj,Xi)) in
+	let h2j' =H2(IDj,Qj) in 
+	let Cj = XOR(M',h2j') in 
+	
+	let h3j' = H3(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in 
+	let h4j' = H4(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in 
+	let h5j' = H5(IDi,IDj,Xi,Yi,Xj,Yj,Cj,Kj,Tj) in 
+	
+	let sigema' =  ADD(Mult(h3j',tj),ADD(Mult(h4j',xj),Mult(h5j',yj))) in
+	
+	out(Pub,(Cj,sigema',Kj,Tj));
+	
+	event endDevicej(IDj)
+	else 0.
+	
+	
+	
+	
+(*Process Replication*)
+
+process
+(!Devicei | !Devicej | !KGC)
+	
+	
+	
+
+
+
+
+
+
+
+
